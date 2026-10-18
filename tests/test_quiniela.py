@@ -388,3 +388,61 @@ def test_pleno_uses_market_when_available():
     assert con["mercado"]["total"]["line"] == 2.5
     sin = by["Villarreal-Elche"]
     assert sin["pleno_fuente"] == "modelo" and sin["goles_mercado"] is None
+
+
+def test_premios_y_bote(monkeypatch):
+    import app as webapp
+    from quiniela import config, storage
+    with storage.conn() as db:
+        for tabla in ("premios", "bote", "participantes"):
+            db.execute(f"DELETE FROM {tabla}")
+    webapp._state.update(analisis=None, ts=0)
+    monkeypatch.setattr(config, "ADMIN_PIN", "1234")
+    c = webapp.create_app("").test_client()
+    for url in ("/premios", "/bote"):
+        assert c.get(url).status_code == 200
+    # visitantes: pueden ver pero no tocar
+    assert c.post("/api/premios", json={"temporada": "2026-2027", "jornada": 14, "importe": "10"}).status_code == 403
+    assert c.post("/api/bote", json={"jornada": "14", "importe": "2"}).status_code == 403
+    c.post("/api/participar", json={"nombre": "Ana", "bizum": True})
+    c.post("/api/participar", json={"nombre": "Luis", "bizum": True})
+    c.post("/api/participar", json={"nombre": "Marta", "bizum": True})
+    p = c.get("/api/premios").get_json()
+    fila = [f for f in p["filas"] if f["key"] == "2026-2027-J14"][0]
+    assert fila["n"] == 3 and fila["participantes"] == ["Ana", "Luis", "Marta"] and fila["premio"] is None
+    assert p["temporada_actual"] == "2026-2027" and p["jornada_actual"] == 14
+    # administrador
+    c.post("/api/login", json={"pin": "1234"})
+    p = c.post("/api/premios", json={"temporada": "2026-2027", "jornada": 14, "importe": "45,30",
+                                     "nota": "12 aciertos"}).get_json()
+    fila = [f for f in p["filas"] if f["key"] == "2026-2027-J14"][0]
+    assert fila["premio"] == 45.30 and fila["por_persona"] == 15.10 and fila["nota"] == "12 aciertos"
+    assert p["total"] == 45.30 and p["con_premio"] == 1
+    # jornada antigua sin apuntados en la web: nombres escritos a mano
+    p = c.post("/api/premios", json={"temporada": "2026-2027", "jornada": 9, "importe": "8",
+                                     "nombres": "Pepe, Lola"}).get_json()
+    f9 = [f for f in p["filas"] if f["jornada"] == 9][0]
+    assert f9["participantes"] == ["Pepe", "Lola"] and f9["por_persona"] == 4.0 and f9["nombres_manual"]
+    assert [f["jornada"] for f in p["filas"]][:2] == [14, 9]                    # más reciente primero
+    assert c.post("/api/premios", json={"temporada": "26/27", "jornada": 1, "importe": "1"}).status_code == 400
+    assert c.post("/api/premios", json={"temporada": "2026-2027", "jornada": 1, "importe": "-1"}).status_code == 400
+    p = c.post("/api/premios/2026-2027-J9/borrar", json={}).get_json()
+    assert all(f["jornada"] != 9 for f in p["filas"])
+    # bote común
+    b = c.post("/api/bote", json={"jornada": "14", "importe": "4,50", "nota": "sobrante"}).get_json()
+    b = c.post("/api/bote", json={"jornada": "15", "importe": "1.234,56"}).get_json()
+    b = c.post("/api/bote", json={"jornada": "16", "importe": "-6"}).get_json()
+    assert b["total"] == round(4.50 + 1234.56 - 6, 2)
+    assert [m["jornada"] for m in b["movimientos"]] == ["16", "15", "14"]
+    assert c.post("/api/bote", json={"jornada": "", "importe": "1"}).status_code == 400
+    assert c.post("/api/bote", json={"jornada": "17", "importe": "abc"}).status_code == 400
+    b = c.post(f"/api/bote/{b['movimientos'][0]['id']}/borrar", json={}).get_json()
+    assert b["total"] == round(4.50 + 1234.56, 2)
+
+
+def test_parse_euros():
+    from quiniela.storage import parse_euros, ImporteError
+    assert [parse_euros(x) for x in ("12,50", "12.50", "1.234,56", "-3", "7 €", "0,75")] == \
+        [1250, 1250, 123456, -300, 700, 75]
+    with pytest.raises(ImporteError):
+        parse_euros("")

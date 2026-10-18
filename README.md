@@ -79,6 +79,12 @@ Ajustes (pesos, precio por apuesta, etc.) en `quiniela/config.py` o por variable
   pendiente o en juego, verde = acertado, rojo = fallado. «Todas» muestra las 4 apuestas a la vez; al
   elegir una apuesta se colorea la fila entera. Se actualiza solo cada minuto.
 
+- **Premios** (`/premios`): cada jornada con sus participantes (nombres y número), el premio ganado
+  y lo que toca por persona. El administrador apunta el importe; para jornadas antiguas sin apuntados en la
+  web se pueden escribir los nombres a mano.
+- **Bote común** (`/bote`): el dinero que sobra de cada jornada. El administrador añade movimientos
+  (jornada + importe; en negativo para sacar dinero) y se ve el total acumulado.
+
 La casilla de Bizum es de confianza: la app no comprueba pagos.
 
 ## Guardar y medir aciertos

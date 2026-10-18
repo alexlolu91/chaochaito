@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import threading
 import time
 from datetime import datetime
@@ -143,6 +144,16 @@ def participar():
 @bp.get("/estado")
 def estado_page():
     return render_template("estado.html", page="estado")
+
+
+@bp.get("/premios")
+def premios_page():
+    return render_template("premios.html", page="premios")
+
+
+@bp.get("/bote")
+def bote_page():
+    return render_template("bote.html", page="bote")
 
 
 # --- Pronóstico -------------------------------------------------------------------------
@@ -301,6 +312,101 @@ def api_quitar(pid):
     key, jornada = current_key()
     storage.remove_participante(key, pid)
     return jsonify(_participantes_payload(key, jornada))
+
+
+# --- Premios y bote común ----------------------------------------------------------------
+
+_KEY_RE = re.compile(r"^(\d{4}-\d{4})-J(\d+)$")
+
+
+def _split_key(key):
+    m = _KEY_RE.match(key or "")
+    return (m.group(1), int(m.group(2))) if m else (None, None)
+
+
+def _euros(cents):
+    return round(cents / 100, 2)
+
+
+@bp.get("/api/premios")
+def api_premios():
+    premios = storage.list_premios()
+    partic = storage.participantes_por_jornada()
+    keys = set(premios) | set(partic) | set(storage.jornadas_con_apuestas())
+    _, jornada_actual = current_key()
+    filas = []
+    for k in keys:
+        temporada, num = _split_key(k)
+        pr = premios.get(k) or {}
+        nombres = partic.get(k) or [n.strip() for n in (pr.get("nombres") or "").split(",") if n.strip()]
+        cents = pr.get("importe_cents")
+        filas.append({
+            "key": k, "temporada": temporada, "jornada": num,
+            "participantes": nombres, "n": len(nombres),
+            "nombres_manual": not partic.get(k) and bool(nombres),
+            "premio": _euros(cents) if cents is not None else None,
+            "por_persona": _euros(cents / len(nombres)) if cents and nombres else None,
+            "nota": pr.get("nota"),
+        })
+    filas.sort(key=lambda f: (f["temporada"] or "", f["jornada"] or 0, f["key"]), reverse=True)
+    total = sum(f["premio"] or 0 for f in filas)
+    return jsonify({"filas": filas, "total": round(total, 2),
+                    "con_premio": sum(1 for f in filas if f["premio"]),
+                    "temporada_actual": (jornada_actual or {}).get("temporada"),
+                    "jornada_actual": (jornada_actual or {}).get("jornada"), "admin": is_admin()})
+
+
+@bp.post("/api/premios")
+@admin_required
+def api_premios_guardar():
+    b = request.get_json(force=True)
+    temporada = str(b.get("temporada") or "").strip()
+    if not re.match(r"^\d{4}-\d{4}$", temporada):
+        return jsonify({"error": "Temporada con formato 2026-2027"}), 400
+    try:
+        num = int(b.get("jornada"))
+        cents = storage.parse_euros(b.get("importe"))
+    except (TypeError, ValueError) as e:
+        return jsonify({"error": str(e) if isinstance(e, storage.ImporteError) else "Jornada no válida"}), 400
+    if cents < 0:
+        return jsonify({"error": "El premio no puede ser negativo"}), 400
+    nombres = ", ".join(n.strip() for n in str(b.get("nombres") or "").split(",") if n.strip())
+    storage.set_premio(f"{temporada}-J{num}", cents, (b.get("nota") or "").strip()[:120], nombres[:500])
+    return api_premios()
+
+
+@bp.post("/api/premios/<key>/borrar")
+@admin_required
+def api_premios_borrar(key):
+    storage.delete_premio(key)
+    return api_premios()
+
+
+@bp.get("/api/bote")
+def api_bote():
+    movs = storage.list_bote()
+    for m in movs:
+        m["importe"] = _euros(m.pop("importe_cents"))
+    return jsonify({"movimientos": movs[::-1], "total": round(sum(m["importe"] for m in movs), 2),
+                    "admin": is_admin()})
+
+
+@bp.post("/api/bote")
+@admin_required
+def api_bote_add():
+    b = request.get_json(force=True)
+    try:
+        storage.add_bote(b.get("jornada"), storage.parse_euros(b.get("importe")), (b.get("nota") or "").strip())
+    except storage.ImporteError as e:
+        return jsonify({"error": str(e)}), 400
+    return api_bote()
+
+
+@bp.post("/api/bote/<int:mov_id>/borrar")
+@admin_required
+def api_bote_borrar(mov_id):
+    storage.delete_bote(mov_id)
+    return api_bote()
 
 
 # --- Aplicación ---------------------------------------------------------------------------

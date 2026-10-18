@@ -161,3 +161,14 @@ body.admin #btnSave.admin-only{display:block !important}
 .plenolist{margin:4px 0 0;padding-left:20px}
 .plenolist li{margin:2px 0}
 .plenolist .cell{font-size:15px;min-width:36px;background:var(--line)}
+
+/* --- premios y bote --- */
+.inline-form{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+.inline-form label{display:flex;flex-direction:column;gap:4px;font-weight:600;font-size:13px;margin:0;flex:0 1 150px}
+.inline-form label.wide{flex:1 1 280px}
+.inline-form input{font:inherit;font-weight:400;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);width:100%}
+.inline-form button{height:40px}
+.score.win{color:var(--green)} .score.neg{color:var(--red)}
+.bote-total{max-width:none}
+.bote-total .big{font-size:56px}
+td.score, .kpi b, .bote-total .big{white-space:nowrap}

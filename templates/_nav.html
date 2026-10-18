@@ -7,6 +7,8 @@ ME.then(m => document.body.classList.toggle("admin", !!m.admin));
   <a href="{{ base }}/" class="{{ 'on' if page == 'inicio' else '' }}">Pronóstico</a>
   <a href="{{ base }}/participar" class="{{ 'on' if page == 'participar' else '' }}">¿Quieres participar?</a>
   <a href="{{ base }}/estado" class="{{ 'on' if page == 'estado' else '' }}">Estado de mi Quiniela</a>
+  <a href="{{ base }}/premios" class="{{ 'on' if page == 'premios' else '' }}">Premios</a>
+  <a href="{{ base }}/bote" class="{{ 'on' if page == 'bote' else '' }}">Bote común</a>
   <span class="navcount" id="navCount" title="Participantes de esta jornada"></span>
   <button type="button" class="adminbtn" id="adminBtn" title="Zona de administrador">🔒</button>
 </nav>

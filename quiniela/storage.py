@@ -38,6 +38,20 @@ CREATE TABLE IF NOT EXISTS bajas (
     num         INTEGER NOT NULL,
     PRIMARY KEY (jornada_key, partido, lado)
 );
+CREATE TABLE IF NOT EXISTS premios (
+    jornada_key    TEXT PRIMARY KEY,
+    importe_cents  INTEGER NOT NULL,
+    nota           TEXT,
+    nombres        TEXT,
+    actualizado    TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS bote (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    jornada        TEXT NOT NULL,
+    importe_cents  INTEGER NOT NULL,
+    nota           TEXT,
+    creado         TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS kv (
     k       TEXT PRIMARY KEY,
     v       TEXT NOT NULL,
@@ -244,3 +258,86 @@ def update_apuestas_datos(key, data):
     """Actualiza los datos sin cambiar la fecha de confirmación."""
     with conn() as c:
         c.execute("UPDATE apuestas SET datos=? WHERE jornada_key=?", (json.dumps(data), key))
+
+
+
+# --- Dinero --------------------------------------------------------------------------
+
+class ImporteError(ValueError):
+    pass
+
+
+def parse_euros(texto):
+    """'12,50' / '12.50' / '1.234,56' / '-3' -> céntimos (int)."""
+    t = str(texto or "").strip().replace("€", "").replace(" ", "")
+    if not t:
+        raise ImporteError("Escribe un importe.")
+    if "," in t:
+        t = t.replace(".", "").replace(",", ".")
+    try:
+        cents = round(float(t) * 100)
+    except ValueError:
+        raise ImporteError(f"Importe no válido: {texto}") from None
+    if abs(cents) > 10_000_000_00:
+        raise ImporteError("Importe demasiado grande.")
+    return cents
+
+
+# --- Premios por jornada ------------------------------------------------------------
+
+def set_premio(key, importe_cents, nota=None, nombres=None):
+    with conn() as c:
+        c.execute("INSERT INTO premios (jornada_key, importe_cents, nota, nombres, actualizado) VALUES (?,?,?,?,?) "
+                  "ON CONFLICT(jornada_key) DO UPDATE SET importe_cents=excluded.importe_cents, nota=excluded.nota, "
+                  "nombres=excluded.nombres, actualizado=excluded.actualizado",
+                  (key, int(importe_cents), nota or None, nombres or None, datetime.now().isoformat(timespec="seconds")))
+
+
+def delete_premio(key):
+    with conn() as c:
+        c.execute("DELETE FROM premios WHERE jornada_key=?", (key,))
+
+
+def list_premios():
+    with conn() as c:
+        rows = c.execute("SELECT jornada_key, importe_cents, nota, nombres, actualizado FROM premios").fetchall()
+    return {k: {"importe_cents": cents, "nota": nota, "nombres": nombres, "actualizado": act}
+            for k, cents, nota, nombres, act in rows}
+
+
+def participantes_por_jornada():
+    with conn() as c:
+        rows = c.execute("SELECT jornada_key, nombre FROM participantes ORDER BY id").fetchall()
+    out = {}
+    for k, n in rows:
+        out.setdefault(k, []).append(n)
+    return out
+
+
+def jornadas_con_apuestas():
+    with conn() as c:
+        return [r[0] for r in c.execute("SELECT jornada_key FROM apuestas").fetchall()]
+
+
+# --- Bote común ------------------------------------------------------------------------
+
+def add_bote(jornada, importe_cents, nota=None):
+    jornada = " ".join(str(jornada or "").split())
+    if not jornada:
+        raise ImporteError("Indica la jornada.")
+    with conn() as c:
+        c.execute("INSERT INTO bote (jornada, importe_cents, nota, creado) VALUES (?,?,?,?)",
+                  (jornada[:40], int(importe_cents), (nota or "")[:120] or None,
+                   datetime.now().isoformat(timespec="seconds")))
+
+
+def list_bote():
+    with conn() as c:
+        rows = c.execute("SELECT id, jornada, importe_cents, nota, creado FROM bote ORDER BY id").fetchall()
+    return [{"id": i, "jornada": j, "importe_cents": cents, "nota": nota, "creado": cr}
+            for i, j, cents, nota, cr in rows]
+
+
+def delete_bote(mov_id):
+    with conn() as c:
+        c.execute("DELETE FROM bote WHERE id=?", (int(mov_id),))

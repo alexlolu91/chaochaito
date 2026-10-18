@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bote común · ChaoChaito Quiniela</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ base }}/static/app.css">
+</head>
+<body>
+<div class="wrap">
+  {% include "_nav.html" %}
+  <header>
+    <div>
+      <h1>Bote <span>común</span></h1>
+      <div class="meta">El dinero que sobra de cada jornada y que se va acumulando.</div>
+    </div>
+  </header>
+
+  <div class="card bote-total partic"><span class="note">Total en el bote</span><div class="big" id="total">—</div></div>
+
+  <div class="card form-card admin-only" style="max-width:none;margin:18px 0">
+    <h2 class="cond" style="margin:0 0 4px;font-size:22px;text-transform:uppercase">Añadir al bote</h2>
+    <form id="frm" class="inline-form" autocomplete="off">
+      <label>Jornada<input type="text" id="jornada" maxlength="40" placeholder="15" required></label>
+      <label>Importe (€)<input type="text" id="importe" inputmode="decimal" placeholder="0,00" required></label>
+      <label class="wide">Nota (opcional)<input type="text" id="nota" maxlength="120" placeholder="Ej.: sobrante de 10 participantes"></label>
+      <button type="submit" class="primary">Añadir</button>
+    </form>
+    <div class="note">Para sacar dinero del bote, pon el importe en negativo (por ejemplo, -6).</div>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div class="card"><div id="tabla"><div class="loading">Cargando…</div></div></div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const eur = v => v.toLocaleString("es-ES", {minimumFractionDigits: 2, maximumFractionDigits: 2}) + " €";
+let D = null;
+
+async function api(url, body){
+  const r = await fetch(url, body ? {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)} : {});
+  const j = await r.json();
+  if(!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+function msg(t, ok){ $("#msg").textContent = t; $("#msg").className = "msg " + (ok ? "okk" : "err"); }
+
+function render(){
+  $("#total").textContent = eur(D.total);
+  if(!D.movimientos.length){ $("#tabla").innerHTML = '<div class="loading">El bote está vacío por ahora.</div>'; return; }
+  let h = `<table><thead><tr><th>Jornada</th><th>Nota</th><th style="text-align:right">Importe</th><th>Fecha</th><th class="admin-only"></th></tr></thead><tbody>`;
+  D.movimientos.forEach(m => {
+    h += `<tr><td class="teams">Jornada ${esc(m.jornada)}</td><td class="note">${esc(m.nota || "")}</td>
+      <td style="text-align:right" class="score ${m.importe < 0 ? "neg" : "win"}">${m.importe > 0 ? "+" : ""}${eur(m.importe)}</td>
+      <td class="note">${new Date(m.creado).toLocaleDateString("es-ES")}</td>
+      <td class="admin-only" style="text-align:right"><button type="button" data-del="${m.id}" title="Borrar">✕</button></td></tr>`;
+  });
+  $("#tabla").innerHTML = h + "</tbody></table>";
+  document.querySelectorAll("[data-del]").forEach(b => b.onclick = () => borrar(b.dataset.del));
+}
+
+async function borrar(id){
+  if(!confirm("¿Borrar este movimiento del bote?")) return;
+  try { D = await api(`${BASE}/api/bote/${id}/borrar`, {}); render(); } catch(e){ alert(e.message); }
+}
+
+$("#frm").onsubmit = async ev => {
+  ev.preventDefault();
+  try {
+    D = await api(BASE + "/api/bote", {jornada: $("#jornada").value, importe: $("#importe").value, nota: $("#nota").value});
+    msg("Añadido al bote ✓", true); $("#importe").value = ""; $("#nota").value = "";
+    render();
+  } catch(e){ msg(e.message, false); }
+};
+
+api(BASE + "/api/bote").then(d => { D = d; render(); }).catch(e => { $("#tabla").innerHTML = `<div class="loading">${esc(e.message)}</div>`; });
+</script>
+</body>
+</html>
