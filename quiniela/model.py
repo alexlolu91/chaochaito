@@ -265,3 +265,43 @@ def pleno(M, top=3):
             probs[key] = probs.get(key, 0) + v
     best = sorted(probs.items(), key=lambda kv: -kv[1])[:top]
     return [{"resultado": k, "prob": round(v, 4)} for k, v in best]
+
+
+
+def prob_over(M, line):
+    """P(goles totales > línea). Con línea entera (asiática) se ignora el empate exacto (devolución)."""
+    over = sum(M[i][j] for i in range(len(M)) for j in range(len(M)) if i + j > line)
+    if float(line).is_integer():
+        push = sum(M[i][j] for i in range(len(M)) for j in range(len(M)) if i + j == line)
+        return over / (1 - push) if push < 1 else over
+    return over
+
+
+def fit_market(market, total=None, prior_sum=2.6):
+    """Goles esperados (local, visitante) que reproducen las cuotas del mercado: 1X2 y, si hay, la línea
+    de más/menos goles. Sin línea de goles, el total se ancla suavemente al del modelo."""
+    def err(lh, la):
+        M = score_matrix(lh, la, max_goals=8)
+        p = outcome_probs(M)
+        e = (p["p1"] - market["p1"]) ** 2 + (p["p2"] - market["p2"]) ** 2
+        if total:
+            e += (prob_over(M, total["line"]) - total["p_over"]) ** 2
+        else:
+            e += 0.002 * (lh + la - prior_sum) ** 2
+        return e
+
+    best = (float("inf"), 1.3, 1.1)
+    for i in range(2, 51):
+        for j in range(2, 51):
+            v = err(i / 10, j / 10)
+            if v < best[0]:
+                best = (v, i / 10, j / 10)
+    _, bh, ba = best
+    for i in range(-10, 11):
+        for j in range(-10, 11):
+            lh, la = bh + i / 100, ba + j / 100
+            if lh > 0.05 and la > 0.05:
+                v = err(lh, la)
+                if v < best[0]:
+                    best = (v, lh, la)
+    return round(best[1], 2), round(best[2], 2)

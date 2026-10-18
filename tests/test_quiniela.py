@@ -353,3 +353,38 @@ def test_postgres_adapter_translates_placeholders():
     storage._PG(fc).execute("SELECT * FROM kv WHERE k=? AND v=?", ("a", "b"))
     assert fc.cur.sql == "SELECT * FROM kv WHERE k=%s AND v=%s" and fc.cur.params == ("a", "b")
     assert "SERIAL PRIMARY KEY" in storage.SCHEMA_PG and "AUTOINCREMENT" not in storage.SCHEMA_PG
+
+
+PSG_BARCA = {"provider": {"name": "DraftKings"}, "overUnder": 4.5,
+             "moneyline": {"home": {"close": {"odds": "+135"}}, "draw": {"close": {"odds": "+340"}},
+                           "away": {"close": {"odds": "+145"}}},
+             "total": {"over": {"close": {"line": "o4.5", "odds": "+120"}},
+                       "under": {"close": {"line": "u4.5", "odds": "-155"}}}}
+
+
+def test_market_total_and_expected_goals():
+    mk = espn.parse_odds(PSG_BARCA)
+    assert mk["total"]["line"] == 4.5 and abs(mk["total"]["p_over"] - 0.428) < 0.002
+    lh, la = model.fit_market(mk, mk["total"], 4.0)
+    M = model.score_matrix(lh, la)
+    p = model.outcome_probs(M)
+    assert abs(p["p1"] - mk["p1"]) < 0.01 and abs(p["p2"] - mk["p2"]) < 0.01
+    assert abs(model.prob_over(M, 4.5) - mk["total"]["p_over"]) < 0.01
+    assert 2.0 < lh < 2.4 and 2.0 < la < 2.3
+    assert model.pleno(M)[0]["resultado"] == "M-M"
+    # cuota fraccionaria de Bet365 y línea asiática entera
+    assert abs(espn.frac_to_prob("33/40") - 40 / 73) < 1e-9
+    b365 = {"bettingOdds": {"teamOdds": {"preMatchOverUnderHandicap": {"value": "4"},
+                                         "preMatchGoalLineOver": {"value": "33/40"},
+                                         "preMatchGoalLineUnder": {"value": "41/40"}}}}
+    assert espn.parse_total(b365)["line"] == 4.0
+
+
+def test_pleno_uses_market_when_available():
+    a = service.analyze(selae.fetch_current().to_dict())
+    by = {p["local"] + "-" + p["visitante"]: p for p in a["partidos"]}
+    con = by["Espanyol-At. Madrid"]
+    assert con["pleno_fuente"] == "mercado" and len(con["goles_mercado"]) == 2 and len(con["pleno"]) == 5
+    assert con["mercado"]["total"]["line"] == 2.5
+    sin = by["Villarreal-Elche"]
+    assert sin["pleno_fuente"] == "modelo" and sin["goles_mercado"] is None

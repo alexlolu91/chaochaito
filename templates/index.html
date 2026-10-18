@@ -127,20 +127,24 @@ function detail(p,i){
   if(!p.reconocido) return `<div class="note">${esc(p.motivos.join(" "))}</div>`;
   const L = p.local_stats, V = p.visitante_stats, M = p.probs_modelo;
   const h2h = p.h2h.matches.length ? `<ul>${p.h2h.matches.slice(0,6).map(m=>`<li>${m.date}: ${esc(m.home)} ${m.score} ${esc(m.away)}</li>`).join("")}</ul>` : "Sin enfrentamientos en las últimas temporadas.";
-  const pleno = p.pleno ? p.pleno.map(x=>`${x.resultado} (${pct(x.prob)})`).join(" · ") : "—";
+  const plenoModelo = (p.pleno_modelo || p.pleno || []).slice(0,3).map(x=>`${x.resultado} (${pct(x.prob)})`).join(" · ") || "—";
+  const plenoTop = p.pleno ? `<div style="margin-top:6px"><b>Pleno al 15 ${p.pleno_fuente === "mercado" ? "según el mercado" : "según el modelo"}:</b>
+      <ol class="plenolist">${p.pleno.map(x=>`<li><span class="cell">${x.resultado}</span> ${pct(x.prob)}</li>`).join("")}</ol></div>` : "";
   let veredicto;
   if(p.fuente !== "mercado") veredicto = `<span class="ko">Sin cuotas todavía: el signo de la tabla es el del modelo.</span>`;
   else if(p.modelo.coincide) veredicto = `<span class="ok">✓ Coincide con el mercado</span>`;
   else veredicto = `<span class="ko">⚑ Discrepa: el mercado dice ${p.signo}, el modelo ${p.modelo.signo}. Buen candidato a doble (${p.doble}).</span>`;
-  const mk = p.mercado ? `1 ${pct(p.mercado.p1)} · X ${pct(p.mercado.px)} · 2 ${pct(p.mercado.p2)}<div class="note">Cuotas de ${esc(p.mercado.provider || "casas de apuestas")}, sin margen.</div>` : `<span class="note">Aún no hay cuotas publicadas para este partido.</span>`;
+  const tl = p.mercado && p.mercado.total;
+  const gm = p.goles_mercado ? `<div style="margin-top:6px">Goles esperados según el mercado: <b>${p.goles_mercado[0].toFixed(2)} – ${p.goles_mercado[1].toFixed(2)}</b>${tl ? `<div class="note">Línea de goles ${tl.line}: ${pct(tl.p_over)} de que haya más</div>` : `<div class="note">Sin línea de goles: el total se estima con el modelo</div>`}</div>` : "";
+  const mk = p.mercado ? `1 ${pct(p.mercado.p1)} · X ${pct(p.mercado.px)} · 2 ${pct(p.mercado.p2)}<div class="note">Cuotas de ${esc(p.mercado.provider || "casas de apuestas")}, sin margen.</div>${gm}` : `<span class="note">Aún no hay cuotas publicadas para este partido.</span>`;
   const ab = p.bajas_auto || {};
   return `<div class="dgrid">
     <div class="opinion"><h4>Opinión del modelo</h4>
       <div class="big">${p.modelo.signo}</div>
       1 ${pct(M.p1)} · X ${pct(M.px)} · 2 ${pct(M.p2)}<br>${veredicto}
-      <div style="margin-top:6px">Goles esperados ${p.goles_esperados.join(" – ")}<br>Resultados más probables: ${pleno}</div>
+      <div style="margin-top:6px">Goles esperados ${p.goles_esperados.join(" – ")}<br>Resultados más probables: ${plenoModelo}</div>
       <ul>${p.motivos.map(m=>`<li>${esc(m)}</li>`).join("")}</ul></div>
-    <div><h4>Mercado (cuotas)</h4>${mk}</div>
+    <div><h4>Mercado (cuotas)</h4>${mk}${i === 14 ? plenoTop : ""}</div>
     <div><h4>${esc(p.local)}</h4>Forma ${form(L.form)}<br>En casa: ${split(L.season_home)}<br>Fuera: ${split(L.season_away)}<br>Tarjetas: ${cards(p.tarjetas.local)}
       <h4 style="margin-top:8px">Bajas y sanciones</h4>${bajasList(ab.local)}</div>
     <div><h4>${esc(p.visitante)}</h4>Forma ${form(V.form)}<br>En casa: ${split(V.season_home)}<br>Fuera: ${split(V.season_away)}<br>Tarjetas: ${cards(p.tarjetas.visitante)}

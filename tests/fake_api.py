@@ -110,7 +110,9 @@ def _scoreboard(lg, day):
     if d.date() == date(2026, 10, 18):
         for h, a in pairs:
             odds = {"provider": {"name": "DraftKings"}, "moneyline": {
-                "home": {"close": {"odds": "+150"}}, "draw": {"close": {"odds": "+240"}}, "away": {"close": {"odds": "+170"}}}}
+                "home": {"close": {"odds": "+150"}}, "draw": {"close": {"odds": "+240"}}, "away": {"close": {"odds": "+170"}}},
+                "total": {"over": {"close": {"line": "o2.5", "odds": "+105"}},
+                          "under": {"close": {"line": "u2.5", "odds": "-125"}}}}
             out.append(_event(f"ev{h}{a}", d.replace(hour=18), lg, h, a, done=False, odds=odds))
     return {"events": out}
 

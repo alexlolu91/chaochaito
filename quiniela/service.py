@@ -314,6 +314,10 @@ def _analyze_match(p, m, ev, market, results, league_avgs, cards, bajas, season,
     p_h2h = model.apply_h2h(p_model, h2h)
     final = model.blend_market(p_h2h, market)
     dbl, dbl_p = model.double_of(final)
+    goles_mercado, M_pleno = None, M
+    if market:
+        goles_mercado = model.fit_market(market, market.get("total"), lh + la)
+        M_pleno = model.score_matrix(*goles_mercado)
     signo_modelo = model.sign_of(p_h2h)
 
     motivos = []
@@ -365,7 +369,10 @@ def _analyze_match(p, m, ev, market, results, league_avgs, cards, bajas, season,
         "tarjetas": {"local": hc, "visitante": ac},
         "h2h": h2h,
         "bajas": {"local": habs, "visitante": aabs},
-        "pleno": model.pleno(M),
+        "pleno": model.pleno(M_pleno, top=5),
+        "pleno_fuente": "mercado" if goles_mercado else "modelo",
+        "goles_mercado": list(goles_mercado) if goles_mercado else None,
+        "pleno_modelo": model.pleno(M) if goles_mercado else None,
         "motivos": motivos,
     }
 

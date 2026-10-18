@@ -227,7 +227,44 @@ def parse_odds(o):
     if not 0.9 < tot < 1.4:   # cuotas absurdas (p.ej. partido ya decidido)
         return None
     return {"p1": probs[0] / tot, "px": probs[1] / tot, "p2": probs[2] / tot,
-            "provider": (o.get("provider") or {}).get("name")}
+            "provider": (o.get("provider") or {}).get("name"), "total": parse_total(o)}
+
+
+def _num(x):
+    try:
+        return float(str(x).lstrip("ou"))
+    except (TypeError, ValueError):
+        return None
+
+
+def frac_to_prob(f):
+    """'33/40' (cuota fraccionaria) -> probabilidad implícita."""
+    try:
+        a, b = str(f).split("/")
+        return 1 / (1 + float(a) / float(b))
+    except (ValueError, ZeroDivisionError):
+        return None
+
+
+def parse_total(o):
+    """Línea de goles (más/menos) y probabilidad sin margen de que haya MÁS goles que la línea."""
+    if not o:
+        return None
+    tot = o.get("total") or {}
+    over = (tot.get("over") or {})
+    under = (tot.get("under") or {})
+    oc = over.get("close") or over.get("open") or {}
+    uc = under.get("close") or under.get("open") or {}
+    line = _num(oc.get("line")) or _num(o.get("overUnder"))
+    po, pu = american_to_prob(oc.get("odds") or o.get("overOdds")), american_to_prob(uc.get("odds") or o.get("underOdds"))
+    if (po is None or pu is None) and o.get("bettingOdds"):
+        team = (o.get("bettingOdds") or {}).get("teamOdds") or {}
+        get = lambda k: (team.get(k) or {}).get("value") if isinstance(team.get(k), dict) else team.get(k)  # noqa: E731
+        line = _num(get("preMatchOverUnderHandicap"))
+        po, pu = frac_to_prob(get("preMatchGoalLineOver")), frac_to_prob(get("preMatchGoalLineUnder"))
+    if line is None or po is None or pu is None or not 0.9 < po + pu < 1.3:
+        return None
+    return {"line": line, "p_over": po / (po + pu)}
 
 
 def odds_from_summary(sm):
