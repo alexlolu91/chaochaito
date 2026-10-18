@@ -1,0 +1,29 @@
+<script>
+window.BASE = "{{ base }}";
+window.ME = fetch(BASE + "/api/me").then(r => r.json()).catch(() => ({admin: false, pin: false}));
+ME.then(m => document.body.classList.toggle("admin", !!m.admin));
+</script>
+<nav class="mainnav">
+  <a href="{{ base }}/" class="{{ 'on' if page == 'inicio' else '' }}">Pronóstico</a>
+  <a href="{{ base }}/participar" class="{{ 'on' if page == 'participar' else '' }}">¿Quieres participar?</a>
+  <a href="{{ base }}/estado" class="{{ 'on' if page == 'estado' else '' }}">Estado de mi Quiniela</a>
+  <span class="navcount" id="navCount" title="Participantes de esta jornada"></span>
+  <button type="button" class="adminbtn" id="adminBtn" title="Zona de administrador">🔒</button>
+</nav>
+<script>
+fetch(BASE + "/api/participantes").then(r => r.ok ? r.json() : null).then(d => {
+  if(d) document.getElementById("navCount").textContent = `👥 ${d.total}/${d.maximo}`;
+}).catch(() => {});
+ME.then(m => {
+  const b = document.getElementById("adminBtn");
+  if(!m.pin){ b.style.display = "none"; return; }
+  b.textContent = m.admin ? "🔓 Salir" : "🔒";
+  b.onclick = async () => {
+    if(m.admin){ await fetch(BASE + "/api/logout", {method: "POST"}); location.reload(); return; }
+    const pin = prompt("PIN de administrador");
+    if(!pin) return;
+    const r = await fetch(BASE + "/api/login", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({pin})});
+    if(r.ok) location.reload(); else alert("PIN incorrecto");
+  };
+});
+</script>

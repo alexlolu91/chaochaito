@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+cache/
+*.db
+jornada_manual.json
+.DS_Store
+.env
+.vercel

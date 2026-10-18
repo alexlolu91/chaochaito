@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estado de mi Quiniela · ChaoChaito Quiniela</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ base }}/static/app.css">
+</head>
+<body>
+<div class="wrap">
+  {% include "_nav.html" %}
+  <header>
+    <div>
+      <h1>Estado de mi <span>Quiniela</span></h1>
+      <div class="meta" id="meta">Cargando…</div>
+    </div>
+    <div class="actions"><button id="btnRefresh">Actualizar</button></div>
+  </header>
+
+  <div class="sum" id="sum"></div>
+  <div class="est-tabs" id="tabs"></div>
+  <div class="card"><div id="tabla"><div class="loading">Consultando marcadores…</div></div></div>
+  <p class="note">Amarillo: pendiente o en juego · Verde: acertado · Rojo: fallado. Se actualiza solo cada minuto mientras quedan partidos.</p>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let E = null, vista = 0, timer = null;   // vista 0 = todas, 1..n = una apuesta
+
+function fmtDate(s){ if(!s) return ""; const d = new Date(s); return d.toLocaleDateString("es-ES",{weekday:"short",day:"numeric"}) + " " + d.toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"}); }
+
+async function load(){
+  $("#btnRefresh").disabled = true;
+  try {
+    const r = await fetch(BASE + "/api/estado"); const j = await r.json();
+    if(!r.ok) throw new Error(j.error || r.statusText);
+    E = j; render();
+    clearTimeout(timer);
+    if(E.pendientes > 0) timer = setTimeout(load, 60000);
+  } catch(e){
+    $("#tabla").innerHTML = `<div class="loading">${esc(e.message)}<br><br><a href="{{ base }}/"><button>Ir al pronóstico</button></a></div>`;
+    $("#meta").textContent = "Sin apuestas confirmadas";
+  }
+  $("#btnRefresh").disabled = false;
+}
+
+function estadoFila(f){
+  if(f.pleno) return f.pleno.estado;
+  if(vista === 0) return f.estado === "final" ? "" : "pendiente";
+  return f.apuestas[vista - 1].estado;
+}
+
+function render(){
+  const j = E.jornada || {};
+  $("#meta").innerHTML = `Jornada <b>${j.jornada ?? "—"}</b> · sorteo ${esc(j.fecha_sorteo || "")} · actualizado ${new Date(E.actualizado).toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"})}`;
+  $("#sum").innerHTML = E.totales.map((t,i) => `<div class="kpi"><span>Apuesta ${i+1}</span><b>${t.aciertos}/14</b>
+      <span>${t.fallos} fallos · ${t.pendientes} pend.</span></div>`).join("") +
+    `<div class="kpi"><span>Partidos por terminar</span><b>${E.pendientes}</b></div>`;
+  $("#tabs").innerHTML = [`<button data-v="0" class="${vista===0?"on":""}">Todas</button>`]
+    .concat(E.totales.map((_,i)=>`<button data-v="${i+1}" class="${vista===i+1?"on":""}">Apuesta ${i+1}</button>`)).join("");
+  document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => { vista = +b.dataset.v; render(); });
+
+  const n = E.num_apuestas;
+  const cab = vista === 0 ? E.totales.map((_,i)=>`<th style="text-align:center">${i+1}</th>`).join("") : `<th style="text-align:center">Apuesta ${vista}</th>`;
+  let h = `<table><thead><tr><th></th><th>Partido</th><th>Resultado</th>${cab}</tr></thead><tbody>`;
+  E.filas.forEach(f => {
+    const st = estadoFila(f);
+    let res;
+    if(f.marcador) res = `<span class="score">${f.marcador}</span>${f.estado === "en_juego" ? ` <span class="live">● ${esc(f.detalle)}</span>` : ""}`;
+    else res = `<span class="note">${f.fecha ? fmtDate(f.fecha) : "pendiente"}${f.sin_datos ? " · aún sin marcador en ESPN" : ""}</span>`;
+    let celdas;
+    if(f.pleno){
+      celdas = `<td style="text-align:center" colspan="${vista===0?n:1}"><span class="cell ${f.pleno.estado}">${esc(f.pleno.apuesta || "—")}</span>${f.pleno.actual && f.estado!=="final" ? ` <span class="note">ahora ${f.pleno.actual}</span>` : ""}</td>`;
+    } else if(vista === 0){
+      celdas = f.apuestas.map(a => `<td style="text-align:center"><span class="cell ${a.estado}">${a.signo}</span></td>`).join("");
+    } else {
+      const a = f.apuestas[vista-1];
+      celdas = `<td style="text-align:center"><span class="cell ${a.estado}">${a.signo}</span></td>`;
+    }
+    h += `<tr class="erow ${st}"><td class="num">${f.pleno ? "P15" : f.num}</td>
+      <td class="teams">${esc(f.local)} – ${esc(f.visitante)}<small>${esc(f.liga_nombre || "")}</small></td>
+      <td>${res}</td>${celdas}</tr>`;
+  });
+  $("#tabla").innerHTML = h + "</tbody></table>";
+}
+
+$("#btnRefresh").onclick = load;
+load();
+</script>
+</body>
+</html>

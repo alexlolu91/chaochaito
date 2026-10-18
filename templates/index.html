@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChaoChaito Quiniela</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ base }}/static/app.css">
+</head>
+<body>
+<div class="wrap">
+  {% include "_nav.html" %}
+  <header>
+    <div>
+      <h1>ChaoChaito <span>Quiniela</span></h1>
+      <div class="meta" id="meta">Cargando la quiniela vigente…</div>
+    </div>
+    <div class="actions">
+      <button id="btnRefresh" class="primary admin-only">Actualizar datos</button>
+      <button id="btnManual" class="admin-only">Introducir a mano</button>
+    </div>
+  </header>
+
+  <div id="avisos"></div>
+  <div class="grid">
+    <div class="card"><div id="tabla"><div class="loading">Consultando Loterías y ESPN… la primera vez tarda un poco.</div></div></div>
+    <aside>
+      <div class="card partic">
+        <h2>Participantes</h2>
+        <div id="partic"><span class="note">Cargando…</span></div>
+        <a href="{{ base }}/participar"><button style="width:100%;margin-top:8px">¿Quieres participar?</button></a>
+      </div>
+      <div class="card ticket">
+        <h2>Nuestras 4 apuestas</h2>
+        <div id="boleto"><span class="note">Calculando…</span></div>
+        <button id="btnSave" class="primary admin-only" style="width:100%;margin-top:10px">Confirmar estas apuestas</button>
+        <p class="note">Son las 4 combinaciones más probables: la 1 lleva el favorito en cada partido y las otras
+          cambian los partidos más dudosos (en naranja). Al confirmarlas, se siguen en "Estado de mi Quiniela".</p>
+      </div>
+      <div class="card hist">
+        <h2>Historial</h2>
+        <div id="historial" class="note">Aún no has guardado pronósticos.</div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<dialog id="dlgManual">
+  <h3 class="cond" style="font-size:22px;margin:0 0 6px">Introducir la quiniela a mano</h3>
+  <p class="note">Una línea por partido, en orden: <code>Local - Visitante</code>. Añade <code>(f)</code> a los partidos de Liga F. También puedes pegar el JSON de Loterías.</p>
+  <p class="note"><b>Opción rápida:</b> abre el sorteo en tu navegador, selecciona todo (⌘A), copia (⌘C) y pégalo aquí. Si sale <code>[]</code>, prueba la fecha siguiente.</p>
+  <div class="actions" id="selaeLinks" style="margin-bottom:8px"></div>
+  <textarea id="txtManual" placeholder="Espanyol - At. Madrid&#10;Villarreal - Elche&#10;…&#10;Athletic Club (f) - Valencia (f)"></textarea>
+  <div class="actions" style="justify-content:flex-end;margin-top:10px">
+    <button id="btnCancel">Cancelar</button>
+    <button id="btnManualOk" class="primary">Analizar</button>
+  </div>
+</dialog>
+
+<script>
+const $ = s => document.querySelector(s);
+let A = null, boleto = null, open = new Set();
+const pct = v => (v*100).toFixed(0) + "%";
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+async function api(url, body){
+  const r = await fetch(url, body ? {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)} : {});
+  const j = await r.json();
+  if(!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+
+async function load(refresh){
+  $("#btnRefresh").disabled = true;
+  if(refresh) $("#tabla").innerHTML = '<div class="loading">Actualizando datos…</div>';
+  try { A = await api(BASE + "/api/analisis" + (refresh ? "?refresh=1" : "")); render(); renderApuestas(); }
+  catch(e){ $("#tabla").innerHTML = `<div class="loading">${esc(e.message)}<br><br><button class="admin-only" onclick="manual()">Introducir a mano</button></div>`; $("#meta").textContent = "Sin quiniela cargada"; }
+  $("#btnRefresh").disabled = false;
+  loadHist();
+}
+
+function render(){
+  const j = A.jornada;
+  const est = (j.estado||"").toLowerCase();
+  $("#meta").innerHTML = `Jornada <b>${j.jornada ?? "—"}</b> · ${esc(j.temporada || "")} · sorteo ${esc(j.fecha_sorteo)}
+    <span class="badge ${est}">${esc(j.estado)}</span>
+    ${j.cierre ? ` · cierre ${esc(j.cierre.slice(0,16))}` : ""}
+    ${j.bote && j.bote !== "0" ? ` · bote ${Number(j.bote).toLocaleString("es-ES")} €` : ""}`;
+  $("#avisos").innerHTML = A.avisos.length ? `<div class="card avisos">${A.avisos.map(a=>`<div>⚠ ${esc(a)}</div>`).join("")}</div>` : "";
+  let h = `<table><thead><tr><th></th><th>Partido</th><th>Probabilidades 1 · X · 2</th><th>Signo</th><th>Confianza</th></tr></thead><tbody>`;
+  A.partidos.forEach((p,i) => {
+    const pl = i === 14;
+    const pr = p.probs;
+    h += `<tr class="row ${pl?"pleno":""}" data-i="${i}">
+      <td class="num">${pl ? "P15" : p.num}</td>
+      <td class="teams">${esc(p.local)} – ${esc(p.visitante)}
+        <small>${p.liga_nombre ? esc(p.liga_nombre) : "?"}${p.fecha ? " · " + fmtDate(p.fecha) : ""}${p.fuente === "mercado" ? '<span class="chip mk">mercado</span>' : (p.reconocido ? '<span class="chip md">modelo</span>' : "")}${p.modelo && !p.modelo.coincide ? `<span class="chip warn">modelo: ${p.modelo.signo}</span>` : ""}${!p.reconocido ? '<span class="chip">sin datos</span>' : ""}</small></td>
+      <td><div class="bar">
+        <div class="b1" style="width:${pr.p1*100}%">${pr.p1>.12?"1 "+pct(pr.p1):""}</div>
+        <div class="bx" style="width:${pr.px*100}%">${pr.px>.12?"X "+pct(pr.px):""}</div>
+        <div class="b2" style="width:${pr.p2*100}%">${pr.p2>.12?"2 "+pct(pr.p2):""}</div></div></td>
+      <td class="sign">${pl && p.pleno ? esc(p.pleno[0].resultado) : p.signo}</td>
+      <td class="conf ${pl ? "pleno" : p.confianza}">${pl ? "Pleno" : p.confianza}${!pl && p.confianza!=="alta" ? `<br><span class="note">doble ${p.doble}</span>`:""}</td></tr>`;
+    if(open.has(i)) h += `<tr class="detail"><td colspan="5">${detail(p,i)}</td></tr>`;
+  });
+  $("#tabla").innerHTML = h + "</tbody></table>";
+  document.querySelectorAll("tr.row").forEach(tr => tr.onclick = () => {
+    const i = +tr.dataset.i; open.has(i) ? open.delete(i) : open.add(i); render();
+  });
+  document.querySelectorAll("[data-baja]").forEach(b => b.onclick = ev => { ev.stopPropagation(); setBaja(b.dataset); });
+}
+
+function fmtDate(s){ const d = new Date(s); return d.toLocaleDateString("es-ES",{weekday:"short",day:"numeric"}) + " " + d.toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"}); }
+const form = f => f ? `<span class="form">${[...f].map(c=>`<span class="${c}">${c}</span>`).join("")}</span>` : "—";
+const split = s => s && s.pj ? `${s.g}V ${s.e}E ${s.p}D · ${s.gf}-${s.gc}` : "sin partidos";
+const cards = c => c ? `${c.amarillas_media} amarillas/partido · ${c.rojas} rojas (últ. ${c.partidos})${c.roja_ultimo?" · <b>roja en el último</b>":""}` : "sin datos";
+
+function bajasList(info){
+  if(!info) return '<div class="note">Sin datos de futbolfantasy para este equipo.</div>';
+  const js = info.jugadores || [];
+  if(!js.length) return '<div class="note">Sin bajas ni sanciones conocidas.</div>';
+  return `<ul class="bl">${js.map(j=>`<li><span class="st ${j.estado}">${j.estado}</span><b>${esc(j.jugador)}</b> · ${esc(j.motivo)}${j.detalle?` <span class="note">(${esc(j.detalle)})</span>`:""}</li>`).join("")}</ul>`;
+}
+
+function detail(p,i){
+  if(!p.reconocido) return `<div class="note">${esc(p.motivos.join(" "))}</div>`;
+  const L = p.local_stats, V = p.visitante_stats, M = p.probs_modelo;
+  const h2h = p.h2h.matches.length ? `<ul>${p.h2h.matches.slice(0,6).map(m=>`<li>${m.date}: ${esc(m.home)} ${m.score} ${esc(m.away)}</li>`).join("")}</ul>` : "Sin enfrentamientos en las últimas temporadas.";
+  const pleno = p.pleno ? p.pleno.map(x=>`${x.resultado} (${pct(x.prob)})`).join(" · ") : "—";
+  let veredicto;
+  if(p.fuente !== "mercado") veredicto = `<span class="ko">Sin cuotas todavía: el signo de la tabla es el del modelo.</span>`;
+  else if(p.modelo.coincide) veredicto = `<span class="ok">✓ Coincide con el mercado</span>`;
+  else veredicto = `<span class="ko">⚑ Discrepa: el mercado dice ${p.signo}, el modelo ${p.modelo.signo}. Buen candidato a doble (${p.doble}).</span>`;
+  const mk = p.mercado ? `1 ${pct(p.mercado.p1)} · X ${pct(p.mercado.px)} · 2 ${pct(p.mercado.p2)}<div class="note">Cuotas de ${esc(p.mercado.provider || "casas de apuestas")}, sin margen.</div>` : `<span class="note">Aún no hay cuotas publicadas para este partido.</span>`;
+  const ab = p.bajas_auto || {};
+  return `<div class="dgrid">
+    <div class="opinion"><h4>Opinión del modelo</h4>
+      <div class="big">${p.modelo.signo}</div>
+      1 ${pct(M.p1)} · X ${pct(M.px)} · 2 ${pct(M.p2)}<br>${veredicto}
+      <div style="margin-top:6px">Goles esperados ${p.goles_esperados.join(" – ")}<br>Resultados más probables: ${pleno}</div>
+      <ul>${p.motivos.map(m=>`<li>${esc(m)}</li>`).join("")}</ul></div>
+    <div><h4>Mercado (cuotas)</h4>${mk}</div>
+    <div><h4>${esc(p.local)}</h4>Forma ${form(L.form)}<br>En casa: ${split(L.season_home)}<br>Fuera: ${split(L.season_away)}<br>Tarjetas: ${cards(p.tarjetas.local)}
+      <h4 style="margin-top:8px">Bajas y sanciones</h4>${bajasList(ab.local)}</div>
+    <div><h4>${esc(p.visitante)}</h4>Forma ${form(V.form)}<br>En casa: ${split(V.season_home)}<br>Fuera: ${split(V.season_away)}<br>Tarjetas: ${cards(p.tarjetas.visitante)}
+      <h4 style="margin-top:8px">Bajas y sanciones</h4>${bajasList(ab.visitante)}</div>
+    <div><h4>Enfrentamientos (3 años)</h4>${p.h2h.g}V ${p.h2h.e}E ${p.h2h.p}D para el local${h2h}</div>
+    <div class="admin-only"><h4>Ajuste manual</h4>
+      <span class="stepper">Local <button data-baja data-i="${i}" data-lado="local" data-d="-1">−</button><b>${p.bajas.local}</b><button data-baja data-i="${i}" data-lado="local" data-d="1">+</button></span>
+      <span class="stepper">Visit. <button data-baja data-i="${i}" data-lado="visitante" data-d="-1">−</button><b>${p.bajas.visitante}</b><button data-baja data-i="${i}" data-lado="visitante" data-d="1">+</button></span>
+      <div class="note">Las bajas de futbolfantasy ya se cuentan solas. Usa esto solo si sabes de otra baja clave (afecta al modelo, no a las cuotas).</div></div>
+  </div>`;
+}
+
+async function setBaja(d){
+  const p = A.partidos[+d.i];
+  const num = Math.max(0, p.bajas[d.lado] + (+d.d));
+  A = await api(BASE + "/api/bajas", {key:A.key, partido:p.num, lado:d.lado, num});
+  render(); renderApuestas();
+}
+
+function renderApuestas(){
+  const ap = A.apuestas;
+  if(!ap){ $("#boleto").innerHTML = '<span class="note">La jornada no tiene 14 partidos.</span>'; $("#btnSave").disabled = true; return; }
+  const g = ap.guardadas;
+  const cols = g ? g.columnas : ap.columnas.map(c => c.signos);
+  const pleno = g ? g.pleno : ap.pleno;
+  const cambiado = g && JSON.stringify(g.columnas) !== JSON.stringify(ap.columnas.map(c => c.signos));
+  const n = cols.length;
+  let h = `<div class="cols" style="grid-template-columns:24px minmax(0,1fr) repeat(${n}, 30px)">
+    <div></div><div class="note">Partido</div>${cols.map((_,c)=>`<div class="hd">${c+1}</div>`).join("")}`;
+  A.partidos.slice(0,14).forEach((p,i) => {
+    h += `<div class="n">${i+1}</div><div class="t">${esc(p.local)} – ${esc(p.visitante)}</div>`;
+    h += cols.map(col => `<div class="s ${col[i] !== cols[0][i] ? "alt" : ""}">${col[i]}</div>`).join("");
+  });
+  const pl = A.partidos[14];
+  if(pl) h += `<div class="n">15</div><div class="t">${esc(pl.local)} – ${esc(pl.visitante)}</div><div class="s pl" style="grid-column:span ${n}">${pleno || "—"}</div>`;
+  h += `</div>`;
+  const p14 = g ? null : ap.p14_total;
+  h += `<div class="kpis">
+    <div class="kpi"><span>Apuestas</span><b>${n}</b></div>
+    <div class="kpi"><span>Coste</span><b>${(n * A.precio_apuesta).toFixed(2).replace(".",",")} €</b></div>
+    <div class="kpi"><span>Aciertos esperados</span><b>${ap.columnas[0].aciertos_esperados.toFixed(1)} / 14</b></div>
+    <div class="kpi"><span>Prob. de 14</span><b>${p14 !== null ? (p14*100).toFixed(3).replace(".",",") + "%" : "—"}</b></div></div>`;
+  if(!g) h += `<div class="note" style="margin-top:6px">Aún sin confirmar por el administrador.</div>`;
+  if(g) h += `<div class="ok" style="margin-top:6px">✓ Confirmadas el ${new Date(g.creado).toLocaleString("es-ES",{day:"numeric",month:"numeric",hour:"2-digit",minute:"2-digit"})}</div>`;
+  if(cambiado) h += `<div class="ko">Las probabilidades han cambiado desde que las confirmaste. Si quieres las nuevas, vuelve a confirmar.</div>`;
+  $("#boleto").innerHTML = h;
+  $("#btnSave").disabled = false;
+  $("#btnSave").textContent = g ? (cambiado ? "Confirmar las nuevas apuestas" : "Volver a confirmar") : "Confirmar estas apuestas";
+}
+
+async function confirmar(){
+  if(A.apuestas.guardadas && !confirm("¿Sustituir las apuestas confirmadas por las actuales?")) return;
+  $("#btnSave").disabled = true;
+  try { const r = await api(BASE + "/api/apuestas/confirmar", {});
+        A.apuestas.guardadas = {columnas: r.columnas, pleno: r.pleno, creado: new Date().toISOString()}; }
+  catch(e){ alert(e.message); }
+  renderApuestas(); loadHist();
+}
+
+async function loadPartic(){
+  try {
+    const d = await api(BASE + "/api/participantes");
+    const pct100 = Math.min(100, 100 * d.total / d.maximo);
+    $("#partic").innerHTML = `<div class="big">${d.total}<span>/${d.maximo}</span></div>
+      <div class="progress"><div style="width:${pct100}%"></div></div>
+      <div class="note">${d.participantes.length ? d.participantes.map(x=>esc(x.nombre)).join(" · ") : "Todavía no se ha apuntado nadie."}</div>`;
+  } catch(e){ $("#partic").innerHTML = `<span class="note">${esc(e.message)}</span>`; }
+}
+
+async function loadHist(){
+  const rows = await api(BASE + "/api/historial");
+  if(!rows.length) return;
+  $("#historial").classList.remove("note");
+  $("#historial").innerHTML = rows.map(r => { const e = r.evaluacion;
+    const res = e && e.jugados ? `<b>${e.aciertos_signo}/${e.jugados}</b> signos (${e.porcentaje}%)${e.aciertos_boleto!=null?` · mejor apuesta ${e.aciertos_boleto}/14`:""}` : '<span class="note">pendiente</span>';
+    return `<div class="item"><div>Jornada ${r.jornada.jornada ?? "?"} <span class="note">${esc(r.jornada.fecha_sorteo)}</span><br>${res}</div><button data-k="${esc(r.key)}">Evaluar</button></div>`; }).join("");
+  document.querySelectorAll("#historial button").forEach(b => b.onclick = async () => {
+    b.disabled = true; try { await api(BASE + "/api/evaluar/" + encodeURIComponent(b.dataset.k), {}); } catch(e){ alert(e.message); } loadHist(); });
+}
+
+function selaeLinks(){
+  const out = [], d = new Date(); d.setHours(12,0,0,0);
+  for(let i=0; i<12 && out.length<3; i++){
+    const x = new Date(d); x.setDate(d.getDate()+i);
+    if([0,3,6].includes(x.getDay())){
+      const ymd = x.getFullYear()+String(x.getMonth()+1).padStart(2,"0")+String(x.getDate()).padStart(2,"0");
+      out.push(`<a target="_blank" rel="noopener" href="https://www.loteriasyapuestas.es/servicios/fechav3?game_id=LAQU&fecha_sorteo=${ymd}"><button type="button">${x.toLocaleDateString("es-ES",{weekday:"short",day:"numeric",month:"numeric"})}</button></a>`);
+    }
+  }
+  $("#selaeLinks").innerHTML = out.join("");
+}
+function manual(){ selaeLinks(); $("#dlgManual").showModal(); }
+$("#btnManual").onclick = manual;
+$("#btnCancel").onclick = () => $("#dlgManual").close();
+$("#btnManualOk").onclick = async () => {
+  try { A = await api(BASE + "/api/manual", {texto: $("#txtManual").value}); $("#dlgManual").close(); render(); renderApuestas(); }
+  catch(e){ alert(e.message); }
+};
+$("#btnRefresh").onclick = () => load(true);
+$("#btnSave").onclick = confirmar;
+loadPartic();
+load(false);
+</script>
+</body>
+</html>
