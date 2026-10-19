@@ -100,6 +100,6 @@ MAX_GOALS = 10
 
 PRICE_PER_BET = float(os.environ.get("QUINIELA_PRICE", 0.75))  # € por apuesta
 NUM_APUESTAS = int(os.environ.get("QUINIELA_APUESTAS", 4))       # columnas sencillas que jugamos
-MAX_PARTICIPANTES = int(os.environ.get("QUINIELA_MAX_PARTICIPANTES", 10))
+MAX_PARTICIPANTES = int(os.environ.get("QUINIELA_MAX_PARTICIPANTES", 15))
 ADMIN_PIN = os.environ.get("QUINIELA_ADMIN_PIN", "")             # para quitar participantes (vacío = sin PIN en local)
 TTL_LIVE = 60                                                    # segundos de caché del marcador en directo

@@ -72,7 +72,7 @@ Ajustes (pesos, precio por apuesta, etc.) en `quiniela/config.py` o por variable
   de signos más probables. La 1 lleva el favorito en todos los partidos; las otras cambian los más
   dudosos (en naranja). El Pleno al 15 es el resultado más probable. Pulsa **Confirmar estas apuestas**
   para fijarlas (se pueden volver a confirmar mientras no cierre la jornada).
-- **¿Quieres participar?** (`/participar`): nombre + casilla «Bizum hecho». El contador X/10 sale en todas
+- **¿Quieres participar?** (`/participar`): nombre + casilla «Bizum hecho». El contador X/15 sale en todas
   las páginas y se reinicia con cada jornada. El máximo se cambia con `QUINIELA_MAX_PARTICIPANTES`.
   Para que solo tú puedas quitar a alguien, define `QUINIELA_ADMIN_PIN` (en local no hace falta).
 - **Estado de mi Quiniela** (`/estado`): los 15 partidos con el marcador en directo de ESPN. Amarillo =

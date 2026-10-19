@@ -281,7 +281,7 @@ def test_confirmar_y_estado_en_directo():
     for url in ("/", "/participar", "/estado"):
         assert c.get(url).status_code == 200
     pr = c.post("/api/participar", json={"nombre": "Alejandro", "bizum": True}).get_json()
-    assert pr["total"] == 1 and pr["maximo"] == 10
+    assert pr["total"] == 1 and pr["maximo"] == 15
     assert c.post("/api/participar", json={"nombre": "Ana", "bizum": False}).status_code == 400
 
 
