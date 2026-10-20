@@ -206,9 +206,12 @@ def analyze(jornada):
         if not any(ff.values()):
             avisos.append("No se pudieron leer las bajas de futbolfantasy; solo cuentan las marcadas a mano.")
 
-    # 8) pronóstico de cada partido
+    # 8) pronóstico de cada partido (las cuotas metidas a mano mandan sobre las de ESPN)
+    manuales = storage.get_cuotas(key)
     out = []
     for p, m, (ev, mk, _) in zip(partidos, matched, sums):
+        if p["num"] in manuales:
+            mk = manual_market(manuales[p["num"]]) or mk
         auto = None
         if m and ff and p["genero"] != "f":
             auto = {"local": ffbajas.team_absences([p["local"], m["home"]["name"]], m["league"], ff),
@@ -272,9 +275,39 @@ def _recent_cards(team_id, matches, season):
     return {"partidos": n, "amarillas_media": round(yel / n, 2), "rojas": red, "roja_ultimo": red_last}
 
 
+def _dec_prob(x):
+    try:
+        x = float(str(x).replace(",", "."))
+    except (TypeError, ValueError):
+        return None
+    return 1 / x if x > 1 else None
+
+
+def manual_market(c):
+    """Cuotas decimales (las de cualquier casa: 1.85, 3.40…) -> probabilidades sin margen."""
+    probs = [_dec_prob(c.get(k)) for k in ("c1", "cx", "c2")]
+    if any(p is None for p in probs):
+        return None
+    tot = sum(probs)
+    po, pu = _dec_prob(c.get("mas")), _dec_prob(c.get("menos"))
+    total = {"line": 2.5, "p_over": po / (po + pu)} if po and pu else None
+    return {"p1": probs[0] / tot, "px": probs[1] / tot, "p2": probs[2] / tot,
+            "provider": "cuotas metidas a mano", "manual": True, "cuotas": c, "total": total}
+
+
 def _analyze_match(p, m, ev, market, results, league_avgs, cards, bajas, season, domestic=None, auto=None):
     base = {"num": p["num"], "local": p["local"], "visitante": p["visitante"], "genero": p["genero"],
             "fecha": p.get("fecha")}
+    if not m and market:
+        gm = model.fit_market(market, market.get("total"))
+        probs = {k: round(market[k], 4) for k in ("p1", "px", "p2")}
+        dbl, dbl_p = model.double_of(probs)
+        return base | {"reconocido": False, "probs": probs, "signo": model.sign_of(probs),
+                       "confianza": model.confidence(probs), "fuente": "mercado", "mercado": market,
+                       "doble": dbl, "doble_prob": round(dbl_p, 4),
+                       "motivos": ["Equipos no reconocidos en ESPN: se usan solo las cuotas metidas a mano."],
+                       "pleno": model.pleno(model.score_matrix(*gm), top=5), "pleno_fuente": "mercado",
+                       "goles_mercado": list(gm)}
     if not m:
         probs = {"p1": 0.45, "px": 0.28, "p2": 0.27}
         return base | {"reconocido": False, "probs": probs, "signo": "1", "confianza": "baja", "fuente": "modelo",

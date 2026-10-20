@@ -150,6 +150,22 @@ def get_bajas(key):
     return out
 
 
+def get_cuotas(key):
+    """Cuotas metidas a mano por el administrador: {num_partido: {c1, cx, c2, mas, menos}}."""
+    v, _ = get_kv(f"cuotas:{key}")
+    return {int(k): x for k, x in (v or {}).items()}
+
+
+def set_cuotas(key, partido, cuotas):
+    """Guarda (o borra, si `cuotas` es None) las cuotas manuales de un partido."""
+    actual = {str(k): x for k, x in get_cuotas(key).items()}
+    if cuotas:
+        actual[str(int(partido))] = cuotas
+    else:
+        actual.pop(str(int(partido)), None)
+    set_kv(f"cuotas:{key}", actual)
+
+
 def set_baja(key, partido, lado, num):
     num = max(0, min(int(num), 5))
     with conn() as c:

@@ -103,6 +103,9 @@ function render(){
     const i = +tr.dataset.i; open.has(i) ? open.delete(i) : open.add(i); render();
   });
   document.querySelectorAll("[data-baja]").forEach(b => b.onclick = ev => { ev.stopPropagation(); setBaja(b.dataset); });
+  document.querySelectorAll("[data-csave]").forEach(b => b.onclick = ev => { ev.stopPropagation(); setCuotas(+b.dataset.csave); });
+  document.querySelectorAll("[data-cdel]").forEach(b => b.onclick = ev => { ev.stopPropagation(); setCuotas(+b.dataset.cdel, true); });
+  document.querySelectorAll("tr.detail").forEach(tr => tr.onclick = ev => ev.stopPropagation());
 }
 
 function fmtDate(s){ const d = new Date(s); return d.toLocaleDateString("es-ES",{weekday:"short",day:"numeric"}) + " " + d.toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"}); }
@@ -117,8 +120,26 @@ function bajasList(info){
   return `<ul class="bl">${js.map(j=>`<li><span class="st ${j.estado}">${j.estado}</span><b>${esc(j.jugador)}</b> · ${esc(j.motivo)}${j.detalle?` <span class="note">(${esc(j.detalle)})</span>`:""}</li>`).join("")}</ul>`;
 }
 
+function cuotasForm(p,i){
+  const c = (p.mercado && p.mercado.manual && p.mercado.cuotas) || {};
+  const inp = (k, ph) => `<input data-cq="${k}" value="${esc(c[k] || "")}" placeholder="${ph}" inputmode="decimal">`;
+  return `<div class="admin-only cuotas-man" data-cform="${i}"><h4>Cuotas a mano</h4>
+    <div class="cq">1 ${inp("c1","2,10")} X ${inp("cx","3,40")} 2 ${inp("c2","3,60")}</div>
+    <div class="cq">+2,5 ${inp("mas","1,90")} −2,5 ${inp("menos","1,90")} <span class="note">(opcional)</span></div>
+    <button type="button" data-csave="${i}">Guardar cuotas</button>
+    ${p.mercado && p.mercado.manual ? `<button type="button" data-cdel="${i}">Quitar (volver a ESPN)</button>` : ""}
+    <div class="note">Solo para este partido; los demás siguen automáticos. Copia las cuotas decimales de cualquier casa de apuestas.</div></div>`;
+}
+
+async function setCuotas(i, borrar){
+  const p = A.partidos[i], box = document.querySelector(`[data-cform="${i}"]`);
+  const body = {key: A.key, partido: p.num, borrar: !!borrar};
+  box.querySelectorAll("[data-cq]").forEach(x => body[x.dataset.cq] = x.value);
+  try { A = await api(BASE + "/api/cuotas", body); render(); renderApuestas(); } catch(e){ alert(e.message); }
+}
+
 function detail(p,i){
-  if(!p.reconocido) return `<div class="note">${esc(p.motivos.join(" "))}</div>`;
+  if(!p.reconocido) return `<div class="dgrid"><div class="note">${esc(p.motivos.join(" "))}${p.mercado ? `<br>1 ${pct(p.mercado.p1)} · X ${pct(p.mercado.px)} · 2 ${pct(p.mercado.p2)}` : ""}</div>${cuotasForm(p,i)}</div>`;
   const L = p.local_stats, V = p.visitante_stats, M = p.probs_modelo;
   const h2h = p.h2h.matches.length ? `<ul>${p.h2h.matches.slice(0,6).map(m=>`<li>${m.date}: ${esc(m.home)} ${m.score} ${esc(m.away)}</li>`).join("")}</ul>` : "Sin enfrentamientos en las últimas temporadas.";
   const plenoModelo = (p.pleno_modelo || p.pleno || []).slice(0,3).map(x=>`${x.resultado} (${pct(x.prob)})`).join(" · ") || "—";
@@ -130,7 +151,7 @@ function detail(p,i){
   else veredicto = `<span class="ko">⚑ Discrepa: el mercado dice ${p.signo}, el modelo ${p.modelo.signo}. Buen candidato a doble (${p.doble}).</span>`;
   const tl = p.mercado && p.mercado.total;
   const gm = p.goles_mercado ? `<div style="margin-top:6px">Goles esperados según el mercado: <b>${p.goles_mercado[0].toFixed(2)} – ${p.goles_mercado[1].toFixed(2)}</b>${tl ? `<div class="note">Línea de goles ${tl.line}: ${pct(tl.p_over)} de que haya más</div>` : `<div class="note">Sin línea de goles: el total se estima con el modelo</div>`}</div>` : "";
-  const mk = p.mercado ? `1 ${pct(p.mercado.p1)} · X ${pct(p.mercado.px)} · 2 ${pct(p.mercado.p2)}<div class="note">Cuotas de ${esc(p.mercado.provider || "casas de apuestas")}, sin margen.</div>${gm}` : `<span class="note">Aún no hay cuotas publicadas para este partido.</span>`;
+  const mk = p.mercado ? `1 ${pct(p.mercado.p1)} · X ${pct(p.mercado.px)} · 2 ${pct(p.mercado.p2)}<div class="note">${p.mercado.manual ? "Cuotas metidas a mano por el administrador" : "Cuotas de " + esc(p.mercado.provider || "casas de apuestas")}, sin margen.</div>${gm}` : `<span class="note">Aún no hay cuotas publicadas para este partido.</span>`;
   const ab = p.bajas_auto || {};
   return `<div class="dgrid">
     <div class="opinion"><h4>Opinión del modelo</h4>
@@ -148,6 +169,7 @@ function detail(p,i){
       <span class="stepper">Local <button data-baja data-i="${i}" data-lado="local" data-d="-1">−</button><b>${p.bajas.local}</b><button data-baja data-i="${i}" data-lado="local" data-d="1">+</button></span>
       <span class="stepper">Visit. <button data-baja data-i="${i}" data-lado="visitante" data-d="-1">−</button><b>${p.bajas.visitante}</b><button data-baja data-i="${i}" data-lado="visitante" data-d="1">+</button></span>
       <div class="note">Las bajas de futbolfantasy ya se cuentan solas. Usa esto solo si sabes de otra baja clave (afecta al modelo, no a las cuotas).</div></div>
+    ${cuotasForm(p,i)}
   </div>`;
 }
 

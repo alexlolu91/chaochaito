@@ -446,3 +446,23 @@ def test_parse_euros():
         [1250, 1250, 123456, -300, 700, 75]
     with pytest.raises(ImporteError):
         parse_euros("")
+
+
+def test_cuotas_manuales_solo_en_un_partido():
+    j = selae.fetch_current().to_dict()
+    key = service.jornada_key(j)
+    from quiniela import storage
+    num = next(p["num"] for p in service.analyze(j)["partidos"] if p["local"] == "Villarreal")
+    storage.set_cuotas(key, num, {"c1": "4.00", "cx": "3.50", "c2": "1.95", "mas": "1.80", "menos": "2.00"})
+    try:
+        a = service.analyze(j)
+        by = {p["local"]: p for p in a["partidos"]}
+        v = by["Villarreal"]
+        assert v["fuente"] == "mercado" and v["mercado"]["manual"] and v["signo"] == "2"
+        assert abs(sum(v["probs"].values()) - 1) < 1e-3 and v["mercado"]["total"]["line"] == 2.5
+        assert v["pleno_fuente"] == "mercado"
+        assert not by["Espanyol"]["mercado"].get("manual")      # el resto sigue con ESPN
+    finally:
+        storage.set_cuotas(key, num, None)
+    assert not service.analyze(j)["partidos"][num - 1].get("mercado")
+    assert service.manual_market({"c1": "2,1", "cx": "", "c2": "3"}) is None

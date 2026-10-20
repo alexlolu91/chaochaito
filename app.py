@@ -214,6 +214,10 @@ def api_bajas():
     if b.get("lado") not in ("local", "visitante"):
         return jsonify({"error": "lado debe ser local o visitante"}), 400
     storage.set_baja(b["key"], b["partido"], b["lado"], b.get("num", 0))
+    return _reanalizar()
+
+
+def _reanalizar():
     a = get_analysis()
     if "error" in a:
         return jsonify(a), 503
@@ -223,6 +227,23 @@ def api_bajas():
         a = service.analyze(j)
         _store(a)
     return api_analisis()
+
+
+@bp.post("/api/cuotas")
+@admin_required
+def api_cuotas():
+    """Cuotas de un partido metidas a mano (por si ESPN no las tiene). `borrar: true` las quita."""
+    b = request.get_json(force=True)
+    if b.get("borrar"):
+        storage.set_cuotas(b["key"], b["partido"], None)
+        return _reanalizar()
+    c = {k: str(b.get(k) or "").strip().replace(",", ".") for k in ("c1", "cx", "c2", "mas", "menos")}
+    if not service.manual_market(c):
+        return jsonify({"error": "Pon las tres cuotas 1, X y 2 en formato decimal (por ejemplo 2,10)."}), 400
+    if bool(c["mas"]) != bool(c["menos"]):
+        return jsonify({"error": "Para la línea de goles pon las dos cuotas: más de 2,5 y menos de 2,5."}), 400
+    storage.set_cuotas(b["key"], b["partido"], c)
+    return _reanalizar()
 
 
 @bp.post("/api/boleto")
