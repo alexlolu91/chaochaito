@@ -103,7 +103,7 @@ def admin_required(f):
     @wraps(f)
     def wrapper(*a, **kw):
         if not is_admin():
-            return jsonify({"error": "Solo el administrador puede hacer esto."}), 403
+            return jsonify({"error": "Solo el administrador puede hacer esto.", "need_login": True}), 403
         return f(*a, **kw)
     return wrapper
 
@@ -188,6 +188,7 @@ def api_diagnostico():
         except Exception as e:  # noqa: BLE001
             out[name] = str(e)[:150]
     out["base_de_datos"] = "postgres" if storage.pg_url() else "sqlite"
+    out["clave_sesion"] = "QUINIELA_SECRET_KEY" if config.SECRET_KEY_FROM_ENV else "derivada del PIN"
     return jsonify(out)
 
 

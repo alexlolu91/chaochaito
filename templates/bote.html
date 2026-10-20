@@ -41,12 +41,6 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;
 const eur = v => v.toLocaleString("es-ES", {minimumFractionDigits: 2, maximumFractionDigits: 2}) + " €";
 let D = null;
 
-async function api(url, body){
-  const r = await fetch(url, body ? {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)} : {});
-  const j = await r.json();
-  if(!r.ok) throw new Error(j.error || r.statusText);
-  return j;
-}
 function msg(t, ok){ $("#msg").textContent = t; $("#msg").className = "msg " + (ok ? "okk" : "err"); }
 
 function render(){

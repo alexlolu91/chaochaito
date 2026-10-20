@@ -14,7 +14,12 @@ DB_PATH = Path(os.environ.get("QUINIELA_DB", _DEFAULT_DATA / "quiniela.db"))
 # --- Web ---------------------------------------------------------------------
 # Ruta bajo la que vive la app: "" en local, "/quiniela" en chaochaito.com/quiniela
 BASE_PATH = os.environ.get("QUINIELA_BASE_PATH", "").rstrip("/")
-SECRET_KEY = os.environ.get("QUINIELA_SECRET_KEY") or os.urandom(24).hex()
+SECRET_KEY_FROM_ENV = bool(os.environ.get("QUINIELA_SECRET_KEY"))
+# La clave que firma la sesión de administrador tiene que ser la misma en todas las instancias de
+# Vercel. Si falta la variable, se deriva del PIN (estable) en vez de inventarla al azar en cada una.
+SECRET_KEY = os.environ.get("QUINIELA_SECRET_KEY") or (
+    __import__("hashlib").sha256(("chaochaito-quiniela:" + os.environ.get("QUINIELA_ADMIN_PIN", "")).encode()).hexdigest()
+    if os.environ.get("QUINIELA_ADMIN_PIN") else os.urandom(24).hex())
 ANALYSIS_TTL = int(os.environ.get("QUINIELA_ANALYSIS_TTL", 3600 if IS_VERCEL else 600))
 
 # --- Fuentes -----------------------------------------------------------------

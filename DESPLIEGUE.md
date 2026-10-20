@@ -19,7 +19,7 @@ Piezas: **GitHub** (código) → **Vercel** (ejecuta la app y la base de datos) 
    |---|---|
    | `QUINIELA_BASE_PATH` | `/quiniela` |
    | `QUINIELA_ADMIN_PIN` | el PIN que quieras para la zona de administrador |
-   | `QUINIELA_SECRET_KEY` | una cadena larga aleatoria (por ejemplo, 40 letras y números al azar) |
+   | `QUINIELA_SECRET_KEY` | una cadena larga aleatoria (opcional: si falta, se deriva del PIN) |
 
 5. *Deployments* → en el último, **⋯ → Redeploy** para que coja las variables.
 6. Prueba la dirección que te da Vercel: `https://<tu-proyecto>.vercel.app/quiniela/`.
