@@ -222,9 +222,15 @@ def analyze(jornada):
     catorce = [r["probs"] for r in out[:14]]
     sugeridas = None
     if len(catorce) == 14:
-        cols = ticket.top_columns(catorce, config.NUM_APUESTAS)
+        cols = [dict(c, fuente="mercado") for c in ticket.top_columns(catorce, config.NUM_APUESTAS_MERCADO)]
+        # Las del modelo: sus columnas más probables que no repitan ninguna de las anteriores.
+        # p14 y aciertos esperados se recalculan con las probabilidades de la tabla (mercado) para compararlas.
+        modelo = [r.get("probs_modelo") or r["probs"] for r in out[:14]]
+        for c in ticket.top_columns(modelo, config.NUM_APUESTAS_MODELO, exclude=[c["signos"] for c in cols]):
+            p14, hits = ticket.column_stats(c["signos"], catorce)
+            cols.append(dict(c, fuente="modelo", p14=p14, aciertos_esperados=hits))
         pleno15 = out[14]["pleno"][0]["resultado"] if len(out) > 14 and out[14].get("pleno") else None
-        sugeridas = {"columnas": cols, "pleno": pleno15,
+        sugeridas = {"columnas": cols, "pleno": pleno15, "n_mercado": config.NUM_APUESTAS_MERCADO,
                      "coste": round(len(cols) * config.PRICE_PER_BET, 2),
                      "p14_total": sum(c["p14"] for c in cols),
                      "confirmadas": storage.get_apuestas(key) is not None}
@@ -470,7 +476,7 @@ def evaluate(key):
 
 # --- Apuestas confirmadas y estado en directo ---------------------------------------
 
-def apuestas_payload(analisis, columnas, pleno):
+def apuestas_payload(analisis, columnas, pleno, n_mercado=None):
     """Lo que se guarda al confirmar: partidos (con ids de ESPN), columnas y pleno."""
     partidos = []
     for p in analisis["partidos"]:
@@ -480,6 +486,7 @@ def apuestas_payload(analisis, columnas, pleno):
                         {"event_id": e.get("event_id"), "neutral": bool(e.get("neutral")),
                          "home_id": (e.get("home") or {}).get("id"), "away_id": (e.get("away") or {}).get("id")})
     return {"jornada": analisis["jornada"], "partidos": partidos, "columnas": columnas, "pleno": pleno,
+            "n_mercado": n_mercado if n_mercado is not None else len(columnas),
             "precio_apuesta": config.PRICE_PER_BET}
 
 
@@ -552,6 +559,6 @@ def estado(key=None):
                              "estado": ("acierto" if real_pleno == pleno else "fallo") if terminado else "pendiente"}
         filas.append(fila)
     return {"key": saved["key"], "jornada": d["jornada"], "confirmado": saved["creado"], "filas": filas,
-            "totales": totales, "num_apuestas": len(cols),
+            "totales": totales, "num_apuestas": len(cols), "n_mercado": d.get("n_mercado", len(cols)),
             "pendientes": sum(1 for f in filas if f["estado"] != "final"),
             "actualizado": datetime.now().isoformat(timespec="seconds")}

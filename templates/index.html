@@ -32,11 +32,12 @@
         <a href="{{ base }}/participar"><button style="width:100%;margin-top:8px">¿Quieres participar?</button></a>
       </div>
       <div class="card ticket">
-        <h2>Nuestras 4 apuestas</h2>
+        <h2>Nuestras <span id="nAp">7</span> apuestas</h2>
         <div id="boleto"><span class="note">Calculando…</span></div>
         <button id="btnSave" class="primary admin-only" style="width:100%;margin-top:10px">Confirmar estas apuestas</button>
-        <p class="note">Son las 4 combinaciones más probables: la 1 lleva el favorito en cada partido y las otras
-          cambian los partidos más dudosos (en naranja). Al confirmarlas, se siguen en "Estado de mi Quiniela".</p>
+        <p class="note">Todas distintas. Las primeras (cabecera azul) son las combinaciones más probables según el
+          mercado; las últimas (cabecera morada, «M») son las del modelo. En naranja, los signos que cambian respecto a la 1.
+          Al confirmarlas, se siguen en "Estado de mi Quiniela".</p>
       </div>
       <div class="card hist">
         <h2>Historial</h2>
@@ -188,8 +189,10 @@ function renderApuestas(){
   const pleno = g ? g.pleno : ap.pleno;
   const cambiado = g && JSON.stringify(g.columnas) !== JSON.stringify(ap.columnas.map(c => c.signos));
   const n = cols.length;
-  let h = `<div class="cols" style="grid-template-columns:24px minmax(0,1fr) repeat(${n}, 30px)">
-    <div></div><div class="note">Partido</div>${cols.map((_,c)=>`<div class="hd">${c+1}</div>`).join("")}`;
+  const nm = ap.n_mercado ?? n;
+  $("#nAp").textContent = n;
+  let h = `<div class="cols" style="grid-template-columns:22px minmax(0,1fr) repeat(${n}, ${n > 5 ? 24 : 30}px)">
+    <div></div><div class="note">Partido</div>${cols.map((_,c)=>`<div class="hd ${c >= nm ? "mod" : "mk"}" title="${c >= nm ? "Según el modelo" : "Según el mercado"}">${c >= nm ? "M" : ""}${c+1}</div>`).join("")}`;
   A.partidos.slice(0,14).forEach((p,i) => {
     h += `<div class="n">${i+1}</div><div class="t">${esc(p.local)} – ${esc(p.visitante)}</div>`;
     h += cols.map(col => `<div class="s ${col[i] !== cols[0][i] ? "alt" : ""}">${col[i]}</div>`).join("");

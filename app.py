@@ -285,7 +285,7 @@ def api_confirmar():
     if not sug:
         return jsonify({"error": "La jornada no tiene 14 partidos"}), 400
     columnas = [c["signos"] for c in sug["columnas"]]
-    data = service.apuestas_payload(a, columnas, sug["pleno"])
+    data = service.apuestas_payload(a, columnas, sug["pleno"], sug.get("n_mercado"))
     storage.save_apuestas(a["key"], data)
     storage.save_prediction(a["key"], {"jornada": a["jornada"], "partidos": a["partidos"], "columnas": columnas})
     return jsonify({"ok": True, "key": a["key"], "columnas": columnas, "pleno": sug["pleno"]})

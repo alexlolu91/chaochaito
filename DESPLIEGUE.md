@@ -38,7 +38,7 @@ Piezas: **GitHub** (código) → **Vercel** (ejecuta la app y la base de datos) 
 ## Cada semana
 - Si Loterías bloquea la lectura desde Vercel: entra como administrador → **Introducir a mano** → pega los
   datos del sorteo (los botones de fechas abren la página de Loterías en tu navegador).
-- Confirma las 4 apuestas desde la zona de administrador.
+- Confirma las 7 apuestas desde la zona de administrador.
 
 ## Actualizar la web
 Cualquier cambio que se suba a GitHub se publica solo en Vercel en un par de minutos.

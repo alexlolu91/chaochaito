@@ -74,13 +74,13 @@ PRESETS = [
 ]
 
 
-def top_columns(probs, k=4):
+def top_columns(probs, k=4, exclude=()):
     """Las `k` columnas sencillas (14 signos) más probables y distintas entre sí.
 
     Como las columnas son excluyentes, P(alguna acierta 14) = suma de sus probabilidades,
     así que elegir las k combinaciones más probables es lo óptimo para el pleno de 14.
     Búsqueda best-first: se parte de la columna con el signo favorito en cada partido y se
-    van probando cambios al siguiente signo más probable."""
+    van probando cambios al siguiente signo más probable. Las columnas de `exclude` se saltan."""
     import heapq
 
     opts = []
@@ -95,16 +95,26 @@ def top_columns(probs, k=4):
     heap = [(-logp(start), start)]
     seen = {start}
     out = []
+    exclude = {tuple(c) for c in exclude}
     while heap and len(out) < k:
         neg, idx = heapq.heappop(heap)
         signos = [opts[i][j][0] for i, j in enumerate(idx)]
-        hits = sum(opts[i][j][1] for i, j in enumerate(idx))
-        cambios = [i for i, j in enumerate(idx) if j > 0]
-        out.append({"signos": signos, "p14": math.exp(-neg), "aciertos_esperados": hits, "cambios": cambios})
         for i in range(len(idx)):
             if idx[i] + 1 < len(opts[i]):
                 nxt = idx[:i] + (idx[i] + 1,) + idx[i + 1:]
                 if nxt not in seen:
                     seen.add(nxt)
                     heapq.heappush(heap, (-logp(nxt), nxt))
+        if tuple(signos) in exclude:
+            continue
+        hits = sum(opts[i][j][1] for i, j in enumerate(idx))
+        cambios = [i for i, j in enumerate(idx) if j > 0]
+        out.append({"signos": signos, "p14": math.exp(-neg), "aciertos_esperados": hits, "cambios": cambios})
     return out
+
+
+def column_stats(signos, probs):
+    """Probabilidad de 14 y aciertos esperados de una columna según `probs`."""
+    key = {"1": "p1", "X": "px", "2": "p2"}
+    ps = [p[key[s]] for s, p in zip(signos, probs)]
+    return math.prod(ps), sum(ps)

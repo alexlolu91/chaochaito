@@ -56,15 +56,16 @@ function estadoFila(f){
 function render(){
   const j = E.jornada || {};
   $("#meta").innerHTML = `Jornada <b>${j.jornada ?? "—"}</b> · sorteo ${esc(j.fecha_sorteo || "")} · actualizado ${new Date(E.actualizado).toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"})}`;
-  $("#sum").innerHTML = E.totales.map((t,i) => `<div class="kpi"><span>Apuesta ${i+1}</span><b>${t.aciertos}/14</b>
+  const lab = i => (i >= (E.n_mercado ?? E.num_apuestas) ? "M" : "") + (i+1);
+  $("#sum").innerHTML = E.totales.map((t,i) => `<div class="kpi"><span>Apuesta ${lab(i)}</span><b>${t.aciertos}/14</b>
       <span>${t.fallos} fallos · ${t.pendientes} pend.</span></div>`).join("") +
     `<div class="kpi"><span>Partidos por terminar</span><b>${E.pendientes}</b></div>`;
   $("#tabs").innerHTML = [`<button data-v="0" class="${vista===0?"on":""}">Todas</button>`]
-    .concat(E.totales.map((_,i)=>`<button data-v="${i+1}" class="${vista===i+1?"on":""}">Apuesta ${i+1}</button>`)).join("");
+    .concat(E.totales.map((_,i)=>`<button data-v="${i+1}" class="${vista===i+1?"on":""}">Apuesta ${lab(i)}</button>`)).join("");
   document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => { vista = +b.dataset.v; render(); });
 
   const n = E.num_apuestas;
-  const cab = vista === 0 ? E.totales.map((_,i)=>`<th style="text-align:center">${i+1}</th>`).join("") : `<th style="text-align:center">Apuesta ${vista}</th>`;
+  const cab = vista === 0 ? E.totales.map((_,i)=>`<th style="text-align:center">${lab(i)}</th>`).join("") : `<th style="text-align:center">Apuesta ${lab(vista-1)}</th>`;
   let h = `<table><thead><tr><th></th><th>Partido</th><th>Resultado</th>${cab}</tr></thead><tbody>`;
   E.filas.forEach(f => {
     const st = estadoFila(f);

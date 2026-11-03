@@ -258,14 +258,14 @@ def test_confirmar_y_estado_en_directo():
     webapp._state.update(analisis=None, ts=0)
     c = webapp.app.test_client()
     a = c.get("/api/analisis").get_json()
-    assert len(a["apuestas"]["columnas"]) == 4 and a["apuestas"]["guardadas"] is None
-    assert a["apuestas"]["coste"] == 3.0
+    assert len(a["apuestas"]["columnas"]) == 7 and a["apuestas"]["guardadas"] is None
+    assert a["apuestas"]["coste"] == 5.25
     assert c.get("/api/estado").status_code in (200, 404)
     r = c.post("/api/apuestas/confirmar", json={}).get_json()
-    assert r["ok"] and len(r["columnas"]) == 4 and all(len(col) == 14 for col in r["columnas"])
+    assert r["ok"] and len(r["columnas"]) == 7 and all(len(col) == 14 for col in r["columnas"])
     assert c.get("/api/analisis").get_json()["apuestas"]["guardadas"]["columnas"] == r["columnas"]
     e = c.get("/api/estado").get_json()
-    assert len(e["filas"]) == 15 and e["num_apuestas"] == 4
+    assert len(e["filas"]) == 15 and e["num_apuestas"] == 7 and e["n_mercado"] == 4
     f1 = e["filas"][0]                                    # Espanyol 0-2 At. Madrid, terminado
     assert f1["estado"] == "final" and f1["marcador"] == "0-2" and f1["signo_actual"] == "2"
     for col, ap in zip(r["columnas"], f1["apuestas"]):
@@ -466,3 +466,26 @@ def test_cuotas_manuales_solo_en_un_partido():
         storage.set_cuotas(key, num, None)
     assert not service.analyze(j)["partidos"][num - 1].get("mercado")
     assert service.manual_market({"c1": "2,1", "cx": "", "c2": "3"}) is None
+
+
+def test_siete_apuestas_distintas_mercado_y_modelo():
+    a = service.analyze(selae.fetch_current().to_dict())
+    ap = a["apuestas"]
+    cols = ap["columnas"]
+    assert len(cols) == 7 and ap["n_mercado"] == 4
+    assert len({tuple(c["signos"]) for c in cols}) == 7                  # ninguna repetida
+    assert [c["fuente"] for c in cols] == ["mercado"] * 4 + ["modelo"] * 3
+    mercado = ticket.top_columns([p["probs"] for p in a["partidos"][:14]], 4)
+    assert [c["signos"] for c in cols[:4]] == [c["signos"] for c in mercado]
+    favorito_modelo = [model.sign_of(p.get("probs_modelo") or p["probs"]) for p in a["partidos"][:14]]
+    if favorito_modelo not in [c["signos"] for c in cols[:4]]:
+        assert cols[4]["signos"] == favorito_modelo                      # la 5 = favorito del modelo en todo
+    assert abs(ap["p14_total"] - sum(c["p14"] for c in cols)) < 1e-12
+
+
+def test_top_columns_exclude():
+    probs = [{"p1": .5, "px": .3, "p2": .2}] * 3
+    top = ticket.top_columns(probs, 3)
+    otra = ticket.top_columns(probs, 2, exclude=[c["signos"] for c in top])
+    assert not {tuple(c["signos"]) for c in otra} & {tuple(c["signos"]) for c in top}
+    assert otra[0]["signos"] == ticket.top_columns(probs, 4)[3]["signos"]

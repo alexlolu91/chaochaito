@@ -66,17 +66,18 @@ aciertos esperados y probabilidad de pleno.
 Ajustes (pesos, precio por apuesta, etc.) en `quiniela/config.py` o por variables de entorno
 (`QUINIELA_MARKET_WEIGHT`, `QUINIELA_PRICE`…).
 
-## Las 4 apuestas, participantes y estado
+## Las 7 apuestas, participantes y estado
 
-- **Pronóstico** (`/`): además del análisis, propone **4 apuestas sencillas** (3 €): las 4 combinaciones
-  de signos más probables. La 1 lleva el favorito en todos los partidos; las otras cambian los más
-  dudosos (en naranja). El Pleno al 15 es el resultado más probable. Pulsa **Confirmar estas apuestas**
+- **Pronóstico** (`/`): además del análisis, propone **7 apuestas sencillas** (5,25 €), todas distintas:
+  las 4 primeras son las combinaciones más probables según el **mercado** y las 3 últimas («M5–M7») las más
+  probables según el **modelo** que no repitan ninguna anterior. En naranja, los signos que cambian respecto
+  a la 1. Se cambia con `QUINIELA_APUESTAS_MERCADO` y `QUINIELA_APUESTAS_MODELO`. El Pleno al 15 es el resultado más probable. Pulsa **Confirmar estas apuestas**
   para fijarlas (se pueden volver a confirmar mientras no cierre la jornada).
 - **¿Quieres participar?** (`/participar`): nombre + casilla «Bizum hecho». El contador X/15 sale en todas
   las páginas y se reinicia con cada jornada. El máximo se cambia con `QUINIELA_MAX_PARTICIPANTES`.
   Para que solo tú puedas quitar a alguien, define `QUINIELA_ADMIN_PIN` (en local no hace falta).
 - **Estado de mi Quiniela** (`/estado`): los 15 partidos con el marcador en directo de ESPN. Amarillo =
-  pendiente o en juego, verde = acertado, rojo = fallado. «Todas» muestra las 4 apuestas a la vez; al
+  pendiente o en juego, verde = acertado, rojo = fallado. «Todas» muestra las 7 apuestas a la vez; al
   elegir una apuesta se colorea la fila entera. Se actualiza solo cada minuto.
 
 - **Premios** (`/premios`): cada jornada con sus participantes (nombres y número), el premio ganado

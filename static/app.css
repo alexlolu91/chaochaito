@@ -175,3 +175,5 @@ td.score, .kpi b, .bote-total .big{white-space:nowrap}
 .cuotas-man .cq{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0}
 .cuotas-man input{width:58px;padding:4px 6px}
 .cuotas-man button{margin:4px 6px 4px 0}
+.cols .hd.mk{color:#2b6cb0}
+.cols .hd.mod{color:#7b4bc4}
