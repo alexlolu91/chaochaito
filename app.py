@@ -321,11 +321,18 @@ def api_participar():
     key, jornada = current_key()
     if not key:
         return jsonify({"error": "No se pudo leer la jornada vigente"}), 503
-    try:
-        storage.add_participante(key, b.get("nombre", ""), bool(b.get("bizum")), config.MAX_PARTICIPANTES)
-    except storage.ParticipacionError as e:
-        return jsonify({"error": str(e)}), 400
-    return jsonify(_participantes_payload(key, jornada))
+    # Se pueden apuntar varios de golpe separando los nombres con ";" (o en líneas distintas)
+    nombres = [n.strip() for n in re.split(r"[;\n]", b.get("nombre", "")) if n.strip()] or [""]
+    añadidos, avisos = [], []
+    for nombre in nombres:
+        try:
+            storage.add_participante(key, nombre, bool(b.get("bizum")), config.MAX_PARTICIPANTES)
+            añadidos.append(" ".join(nombre.split()))
+        except storage.ParticipacionError as e:
+            avisos.append(str(e))
+    if not añadidos:
+        return jsonify({"error": " ".join(dict.fromkeys(avisos))}), 400
+    return jsonify(_participantes_payload(key, jornada) | {"añadidos": añadidos, "avisos": avisos})
 
 
 @bp.post("/api/participantes/<int:pid>/quitar")

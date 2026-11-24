@@ -22,7 +22,8 @@
     <div id="contador"></div>
     <form id="frm" autocomplete="off">
       <label for="nombre">Tu nombre</label>
-      <input type="text" id="nombre" maxlength="40" placeholder="Ej.: Alejandro" required>
+      <input type="text" id="nombre" maxlength="700" placeholder="Ej.: Alejandro" required>
+      <div class="note" style="margin-top:4px">¿Apuntas a varios? Sepáralos con punto y coma: Ana; Pepe; Lucía</div>
       <label class="check"><input type="checkbox" id="bizum"> Bizum hecho</label>
       <button type="submit" class="primary" style="width:100%">Apuntarme</button>
       <div class="msg" id="msg"></div>
@@ -67,7 +68,9 @@ $("#frm").onsubmit = async ev => {
   if(!$("#bizum").checked){ msg("Marca «Bizum hecho» para apuntarte.", false); return; }
   try {
     D = await api(BASE + "/api/participar", {nombre, bizum: true});
-    msg(`¡Apuntado, ${nombre}! Suerte 🍀`, true);
+    const ok = D.añadidos || [nombre], av = D.avisos || [];
+    msg((ok.length > 1 ? `¡Apuntados ${ok.length}: ${ok.join(", ")}! Suerte 🍀` : `¡Apuntado, ${ok[0]}! Suerte 🍀`)
+        + (av.length ? " · No se apuntaron: " + av.join(" ") : ""), !av.length);
     $("#nombre").value = ""; $("#bizum").checked = false;
     render();
   } catch(e){ msg(e.message, false); }

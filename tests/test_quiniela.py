@@ -489,3 +489,17 @@ def test_top_columns_exclude():
     otra = ticket.top_columns(probs, 2, exclude=[c["signos"] for c in top])
     assert not {tuple(c["signos"]) for c in otra} & {tuple(c["signos"]) for c in top}
     assert otra[0]["signos"] == ticket.top_columns(probs, 4)[3]["signos"]
+
+
+def test_participar_varios_con_punto_y_coma():
+    import app as webapp
+    c = webapp.app.test_client()
+    r = c.post("/api/participar", json={"nombre": " Zoe ; Iker;; Nuria ;Zoe", "bizum": True})
+    d = r.get_json()
+    assert r.status_code == 200 and d["añadidos"] == ["Zoe", "Iker", "Nuria"]
+    assert len(d["avisos"]) == 1 and "Zoe" in d["avisos"][0]                # el repetido se avisa
+    nombres = [p["nombre"] for p in d["participantes"]]
+    assert nombres[-3:] == ["Zoe", "Iker", "Nuria"]
+    r = c.post("/api/participar", json={"nombre": "Zoe; Iker", "bizum": True})
+    assert r.status_code == 400                                           # ninguno nuevo
+    assert c.post("/api/participar", json={"nombre": "X1; X2", "bizum": False}).status_code == 400
